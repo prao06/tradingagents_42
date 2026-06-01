@@ -4,10 +4,7 @@ import logging
 import os
 from pathlib import Path
 import json
-from datetime import datetime, timedelta
 from typing import Dict, Any, Tuple, List, Optional
-
-import yfinance as yf
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +16,7 @@ from tradingagents.agents import *
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.agents.utils.memory import TradingMemoryLog
 from tradingagents.dataflows.utils import safe_ticker_component
+from tradingagents.dataflows.returns import fetch_forward_returns, resolve_benchmark
 from tradingagents.agents.utils.agent_states import (
     AgentState,
     InvestDebateState,
@@ -203,23 +201,10 @@ class TradingAgentsGraph:
     def _resolve_benchmark(self, ticker: str) -> str:
         """Pick the benchmark ticker for alpha calculation against ``ticker``.
 
-        ``config["benchmark_ticker"]`` overrides everything when set; otherwise
-        the suffix map matches the ticker's exchange suffix (e.g. ``.T`` for
-        Tokyo). US-listed tickers without a dotted suffix fall through to the
-        empty-suffix entry (SPY by default). Unrecognised suffixes (including
-        US tickers with dots like ``BRK.B``) also fall back to the empty-suffix
-        entry, which is the right default because the alpha calculation works
-        in USD.
+        Thin wrapper over :func:`tradingagents.dataflows.returns.resolve_benchmark`
+        so the reflection loop and the Gate A backtester share one implementation.
         """
-        explicit = self.config.get("benchmark_ticker")
-        if explicit:
-            return explicit
-        benchmark_map = self.config.get("benchmark_map", {})
-        ticker_upper = ticker.upper()
-        for suffix, benchmark in benchmark_map.items():
-            if suffix and ticker_upper.endswith(suffix.upper()):
-                return benchmark
-        return benchmark_map.get("", "SPY")
+        return resolve_benchmark(ticker, self.config)
 
     def _fetch_returns(
         self, ticker: str, trade_date: str, holding_days: int = 5,
@@ -227,39 +212,10 @@ class TradingAgentsGraph:
     ) -> Tuple[Optional[float], Optional[float], Optional[int]]:
         """Fetch raw and alpha return for ticker over holding_days from trade_date.
 
-        ``benchmark`` is the index used as the alpha baseline (resolved by the
-        caller via ``_resolve_benchmark``). Returns ``(raw_return, alpha_return,
-        actual_holding_days)`` or ``(None, None, None)`` if price data is
-        unavailable (too recent, delisted, or network error).
+        Thin wrapper over
+        :func:`tradingagents.dataflows.returns.fetch_forward_returns`.
         """
-        try:
-            start = datetime.strptime(trade_date, "%Y-%m-%d")
-            end = start + timedelta(days=holding_days + 7)  # buffer for weekends/holidays
-            end_str = end.strftime("%Y-%m-%d")
-
-            stock = yf.Ticker(ticker).history(start=trade_date, end=end_str)
-            bench = yf.Ticker(benchmark).history(start=trade_date, end=end_str)
-
-            if len(stock) < 2 or len(bench) < 2:
-                return None, None, None
-
-            actual_days = min(holding_days, len(stock) - 1, len(bench) - 1)
-            raw = float(
-                (stock["Close"].iloc[actual_days] - stock["Close"].iloc[0])
-                / stock["Close"].iloc[0]
-            )
-            bench_ret = float(
-                (bench["Close"].iloc[actual_days] - bench["Close"].iloc[0])
-                / bench["Close"].iloc[0]
-            )
-            alpha = raw - bench_ret
-            return raw, alpha, actual_days
-        except Exception as e:
-            logger.warning(
-                "Could not resolve outcome for %s on %s vs %s (will retry next run): %s",
-                ticker, trade_date, benchmark, e,
-            )
-            return None, None, None
+        return fetch_forward_returns(ticker, trade_date, holding_days, benchmark)
 
     def _resolve_pending_entries(self, ticker: str) -> None:
         """Resolve pending log entries for ticker at the start of a new run.
