@@ -84,6 +84,56 @@ def period_returns_from_trades(trades: pd.DataFrame) -> pd.Series:
     return grouped
 
 
+def t_statistic(period_returns: pd.Series) -> float:
+    """One-sample t-statistic of per-period returns against a zero mean."""
+    r = period_returns.dropna()
+    n = len(r)
+    if n < 2 or r.std(ddof=1) == 0:
+        return 0.0
+    return float(r.mean() / (r.std(ddof=1) / np.sqrt(n)))
+
+
+def bootstrap_pvalue(
+    period_returns: pd.Series, n_boot: int = 5000, seed: int = 0
+) -> float:
+    """One-sided bootstrap p-value for H0: mean period return <= 0.
+
+    Resamples the mean-centered returns (the null) and reports how often a
+    bootstrap mean reaches the observed mean. Dependency-free and seeded, so the
+    value is reproducible. Returns 1.0 when there is too little data to reject.
+    """
+    r = period_returns.dropna().to_numpy()
+    n = len(r)
+    if n < 2:
+        return 1.0
+    observed = r.mean()
+    if observed <= 0:
+        return 1.0
+    rng = np.random.default_rng(seed)
+    centered = r - observed
+    boot_means = rng.choice(centered, size=(n_boot, n), replace=True).mean(axis=1)
+    return float((boot_means >= observed).mean())
+
+
+def ascii_equity_curve(curve: pd.Series, width: int = 60, height: int = 12) -> str:
+    """Render an equity curve as a fixed-size ASCII line chart (no plotting deps)."""
+    vals = curve.dropna().to_numpy(dtype=float)
+    if len(vals) < 2:
+        return "(not enough data to plot)"
+    # Downsample to at most `width` columns.
+    if len(vals) > width:
+        idx = np.linspace(0, len(vals) - 1, width).astype(int)
+        vals = vals[idx]
+    lo, hi = float(vals.min()), float(vals.max())
+    span = hi - lo or 1.0
+    rows = [[" "] * len(vals) for _ in range(height)]
+    for col, v in enumerate(vals):
+        level = int(round((v - lo) / span * (height - 1)))
+        rows[height - 1 - level][col] = "*"
+    chart = "\n".join("".join(row) for row in rows)
+    return f"{hi:7.3f} |\n{chart}\n{lo:7.3f} +" + "-" * len(vals)
+
+
 def summarize(trades: pd.DataFrame, frequency: str) -> Dict[str, float]:
     """Aggregate a per-trade DataFrame into the Gate A summary metrics.
 
@@ -103,6 +153,8 @@ def summarize(trades: pd.DataFrame, frequency: str) -> Dict[str, float]:
         "hit_rate": hit_rate(trades),
         "mean_alpha": float(trades["alpha_return"].dropna().mean()) if not trades.empty else 0.0,
         "mean_cost": float(trades["cost"].dropna().mean()) if not trades.empty else 0.0,
+        "t_stat": t_statistic(period_rets),
+        "p_value": bootstrap_pvalue(period_rets),
         "gross_total_return": (
             float(equity_curve(
                 trades.assign(gross=trades["net_return"] + trades["cost"])

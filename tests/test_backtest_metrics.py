@@ -62,6 +62,38 @@ def test_period_returns_equal_weight_by_date():
     assert pr.loc["2024-02-01"] == pytest.approx(-0.01)
 
 
+def test_t_statistic_known_value():
+    # mean 0.02, std 0.01, n 3 -> t = 0.02 / (0.01/sqrt(3)).
+    t = metrics.t_statistic(pd.Series([0.01, 0.02, 0.03]))
+    assert t == pytest.approx(0.02 / (0.01 / np.sqrt(3)))
+
+
+def test_t_statistic_zero_variance():
+    assert metrics.t_statistic(pd.Series([0.02, 0.02])) == 0.0
+
+
+def test_bootstrap_pvalue_is_seeded_and_small_for_strong_signal():
+    r = pd.Series([0.03, 0.025, 0.035, 0.028, 0.032, 0.027, 0.031, 0.029])
+    p1 = metrics.bootstrap_pvalue(r, seed=0)
+    p2 = metrics.bootstrap_pvalue(r, seed=0)
+    assert p1 == p2          # reproducible
+    assert p1 < 0.05         # consistently positive -> significant
+
+
+def test_bootstrap_pvalue_nonpositive_mean_is_one():
+    assert metrics.bootstrap_pvalue(pd.Series([-0.01, 0.0, -0.02])) == 1.0
+
+
+def test_bootstrap_pvalue_insufficient_data():
+    assert metrics.bootstrap_pvalue(pd.Series([0.01])) == 1.0
+
+
+def test_ascii_equity_curve_renders_and_degrades():
+    chart = metrics.ascii_equity_curve(pd.Series([1.0, 1.1, 1.05, 1.2]))
+    assert "*" in chart and "\n" in chart
+    assert metrics.ascii_equity_curve(pd.Series([1.0])) == "(not enough data to plot)"
+
+
 def test_summarize_keys_and_cost_backout():
     trades = pd.DataFrame({
         "date": ["2024-01-01", "2024-02-01"],

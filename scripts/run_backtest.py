@@ -29,7 +29,7 @@ import logging
 import random
 
 from tradingagents.agents.utils.rating import RATINGS_5_TIER
-from tradingagents.backtest.engine import generate_dates, run_backtest
+from tradingagents.backtest.engine import generate_dates, load_universe, run_backtest
 
 
 def _stub_propagate_fn(seed: int = 0):
@@ -52,7 +52,12 @@ def _stub_returns_fn(seed: int = 1):
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Gate A backtester for TradingAgents")
-    p.add_argument("--tickers", required=True, help="Comma-separated tickers, e.g. NVDA,AAPL")
+    p.add_argument("--tickers", default="", help="Comma-separated tickers, e.g. NVDA,AAPL")
+    p.add_argument("--universe", default=None,
+                   help="Path to a file of tickers (one per line, # comments ok). "
+                        "Merged with --tickers.")
+    p.add_argument("--folds", type=int, default=4,
+                   help="Walk-forward folds for consistency reporting (default 4).")
     p.add_argument("--start", required=True, help="First rebalance date YYYY-MM-DD")
     p.add_argument("--end", required=True, help="Last rebalance date YYYY-MM-DD")
     p.add_argument("--freq", default="monthly", choices=["daily", "weekly", "monthly"])
@@ -74,6 +79,12 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     tickers = [t.strip() for t in args.tickers.split(",") if t.strip()]
+    if args.universe:
+        for t in load_universe(args.universe):
+            if t not in tickers:
+                tickers.append(t)
+    if not tickers:
+        p.error("no tickers: pass --tickers and/or --universe")
     analysts = [a.strip() for a in args.analysts.split(",") if a.strip()]
     dates = generate_dates(args.start, args.end, args.freq)
 
@@ -96,6 +107,7 @@ def main() -> None:
         commission_bps=args.commission_bps,
         slippage_bps=args.slippage_bps,
         frequency=args.freq,
+        n_folds=args.folds,
         output_dir=args.output_dir,
         **kwargs,
     )
@@ -103,6 +115,7 @@ def main() -> None:
     print("\n=== Gate A summary ===")
     for key in ("verdict", "pit", "n_trades", "total_return", "annualized_return",
                 "sharpe", "max_drawdown", "hit_rate", "mean_alpha",
+                "t_stat", "p_value", "significant", "fold_win_rate",
                 "baseline_ticker", "baseline_return", "beats_baseline"):
         print(f"  {key:18}: {summary[key]}")
 

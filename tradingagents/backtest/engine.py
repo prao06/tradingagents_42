@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable, Iterable, List, Optional, Sequence
 
+import numpy as np
 import pandas as pd
 import yfinance as yf
 
@@ -40,6 +41,43 @@ TRADE_COLUMNS = [
     "date", "ticker", "rating", "position",
     "raw_return", "alpha_return", "cost", "net_return", "holding_days",
 ]
+
+
+def load_universe(path: str) -> List[str]:
+    """Read tickers from a file: one per line, ignoring blanks and # comments.
+
+    Inline comments are stripped, so ``NVDA  # Nvidia`` yields ``NVDA``. Order is
+    preserved and duplicates are removed.
+    """
+    seen: List[str] = []
+    for raw in Path(path).read_text().splitlines():
+        token = raw.split("#", 1)[0].strip()
+        if token and token not in seen:
+            seen.append(token)
+    return seen
+
+
+def _fold_summaries(trades: pd.DataFrame, frequency: str, n_folds: int) -> List[dict]:
+    """Split the rebalance dates into contiguous walk-forward folds and summarize
+    each, so a single aggregate number can't hide an edge that lives in one lucky
+    window. Returns [] when there are too few periods to fold meaningfully.
+    """
+    if trades.empty:
+        return []
+    period_dates = sorted(trades["date"].unique())
+    k = max(1, min(n_folds, len(period_dates)))
+    if k < 2:
+        return []
+    folds = []
+    for i, chunk in enumerate(np.array_split(period_dates, k)):
+        sub = trades[trades["date"].isin(set(chunk))]
+        s = metrics.summarize(sub, frequency)
+        folds.append({
+            "fold": i + 1, "start": str(chunk[0]), "end": str(chunk[-1]),
+            "n_periods": s["n_periods"], "total_return": s["total_return"],
+            "sharpe": s["sharpe"], "hit_rate": s["hit_rate"],
+        })
+    return folds
 
 
 def generate_dates(start: str, end: str, freq: str = "monthly") -> List[str]:
@@ -93,6 +131,7 @@ def run_backtest(
     commission_bps: float = 1.0,
     slippage_bps: float = 5.0,
     frequency: str = "monthly",
+    n_folds: int = 4,
     output_dir: Optional[str] = None,
     propagate_fn: Optional[Callable[[str, str], str]] = None,
     returns_fn: Optional[Callable[..., tuple]] = None,
@@ -180,26 +219,40 @@ def run_backtest(
     summary["long_only"] = long_only
     summary["selected_analysts"] = selected_analysts
 
-    # Buy-and-hold baseline over the full window (SPY by default).
-    baseline_ticker = config.get("benchmark_map", {}).get("", "SPY")
-    if len(dates) >= 1:
-        summary["baseline_ticker"] = baseline_ticker
-        summary["baseline_return"] = baseline_fn(baseline_ticker, min(dates), max(dates))
-    else:
-        summary["baseline_ticker"] = baseline_ticker
-        summary["baseline_return"] = 0.0
-
-    summary["beats_baseline"] = bool(summary["total_return"] > summary["baseline_return"])
-    summary["verdict"] = (
-        "PASS" if (summary["beats_baseline"] and summary["sharpe"] > 0 and pit)
-        else "FAIL"
+    # Walk-forward folds: is the edge consistent, or one lucky window?
+    folds = _fold_summaries(trades, frequency, n_folds)
+    summary["folds"] = folds
+    summary["fold_win_rate"] = (
+        float(np.mean([f["total_return"] > 0 for f in folds])) if folds else 0.0
     )
 
-    _write_reports(out, summary)
+    # Buy-and-hold baseline over the full window (SPY by default).
+    baseline_ticker = config.get("benchmark_map", {}).get("", "SPY")
+    summary["baseline_ticker"] = baseline_ticker
+    summary["baseline_return"] = (
+        baseline_fn(baseline_ticker, min(dates), max(dates)) if dates else 0.0
+    )
+
+    # Persist the equity curve for external plotting.
+    curve = metrics.equity_curve(metrics.period_returns_from_trades(trades))
+    if not curve.empty:
+        curve.rename("equity").to_csv(out / "equity.csv", index_label="date")
+
+    summary["beats_baseline"] = bool(summary["total_return"] > summary["baseline_return"])
+    # Significance threshold: a positive backtest with p >= 0.05 is not evidence.
+    summary["significant"] = bool(summary["p_value"] < 0.05)
+    summary["verdict"] = (
+        "PASS" if (
+            summary["beats_baseline"] and summary["sharpe"] > 0
+            and pit and summary["significant"]
+        ) else "FAIL"
+    )
+
+    _write_reports(out, summary, curve)
     return summary
 
 
-def _write_reports(out: Path, summary: dict) -> None:
+def _write_reports(out: Path, summary: dict, curve: "pd.Series") -> None:
     """Persist summary.json and a human-readable summary.md."""
     (out / "summary.json").write_text(json.dumps(summary, indent=2))
     lines = [
@@ -217,8 +270,33 @@ def _write_reports(out: Path, summary: dict) -> None:
         f"- Baseline ({summary['baseline_ticker']} buy & hold): {summary['baseline_return']:+.2%}",
         f"- Beats baseline: {summary['beats_baseline']}",
         "",
+        "## Significance",
+        f"- t-statistic (mean period return vs 0): {summary['t_stat']:.2f}",
+        f"- bootstrap p-value (one-sided): {summary['p_value']:.3f}"
+        + ("  ✅ significant" if summary["significant"] else "  ❌ not significant"),
+        "",
+        "## Walk-forward folds",
+        f"- Folds with positive return: {summary['fold_win_rate']:.0%}",
+        "",
+        "| fold | start | end | periods | total | sharpe | hit |",
+        "|------|-------|-----|---------|-------|--------|-----|",
+    ]
+    for f in summary["folds"]:
+        lines.append(
+            f"| {f['fold']} | {f['start']} | {f['end']} | {f['n_periods']} | "
+            f"{f['total_return']:+.2%} | {f['sharpe']:.2f} | {f['hit_rate']:.0%} |"
+        )
+    if not summary["folds"]:
+        lines.append("| — | — | — | — | — | — | — |")
+    lines += [
+        "",
+        "## Equity curve (growth of $1, net)",
+        "```",
+        metrics.ascii_equity_curve(curve),
+        "```",
+        "",
         "Gate A passes only if the strategy beats the baseline net of costs with a "
-        "positive Sharpe on a point-in-time run. Otherwise, do not proceed to "
-        "execution work.",
+        "positive Sharpe **and** statistical significance (p < 0.05) on a "
+        "point-in-time run. Otherwise, do not proceed to execution work.",
     ]
     (out / "summary.md").write_text("\n".join(lines))
