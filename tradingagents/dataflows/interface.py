@@ -23,6 +23,7 @@ from .alpha_vantage import (
     get_global_news as get_alpha_vantage_global_news,
 )
 from .alpha_vantage_common import AlphaVantageRateLimitError
+from .sec import get_fundamentals as get_sec_fundamentals
 from .symbol_utils import NoMarketDataError
 
 # Configuration and routing logic
@@ -64,6 +65,7 @@ TOOLS_CATEGORIES = {
 VENDOR_LIST = [
     "yfinance",
     "alpha_vantage",
+    "sec",
 ]
 
 # Mapping of methods to their vendor-specific implementations
@@ -80,6 +82,9 @@ VENDOR_METHODS = {
     },
     # fundamental_data
     "get_fundamentals": {
+        # ``sec`` is point-in-time (only 10-Ks filed on/before curr_date); it
+        # falls back to the others when SEC_API_KEY / sec_api is unavailable.
+        "sec": get_sec_fundamentals,
         "alpha_vantage": get_alpha_vantage_fundamentals,
         "yfinance": get_yfinance_fundamentals,
     },

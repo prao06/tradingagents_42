@@ -32,6 +32,12 @@ dependencies = [
     "yfinance>=1.4.1",
 ]
 
+[project.optional-dependencies]
+# Point-in-time SEC 10-K vendor (tradingagents/dataflows/sec.py). Optional so
+# users without a SEC_API_KEY are unaffected; the vendor router falls back to
+# yfinance when this isn't installed.
+sec = ["sec-api>=1.0.0"]
+
 [project.scripts]
 tradingagents = "cli.main:app"
 

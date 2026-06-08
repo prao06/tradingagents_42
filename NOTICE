@@ -1,0 +1,14 @@
+TradingAgents
+Copyright Tauric Research and contributors.
+
+Licensed under the Apache License, Version 2.0.
+
+------------------------------------------------------------------------
+This product includes software adapted from third-party projects:
+
+* FinRobot — AI4Finance Foundation (https://github.com/AI4Finance-Foundation/FinRobot)
+  Licensed under the Apache License, Version 2.0.
+  The point-in-time SEC 10-K data vendor in
+  `tradingagents/dataflows/sec.py` adapts the sec-api.io query and
+  section-extraction approach from FinRobot's
+  `finrobot/data_source/sec_utils.py`.
