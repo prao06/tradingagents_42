@@ -33,10 +33,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Point-in-time SEC 10-K vendor (tradingagents/dataflows/sec.py). Optional so
-# users without a SEC_API_KEY are unaffected; the vendor router falls back to
-# yfinance when this isn't installed.
+# Point-in-time data vendors adapted from FinRobot. Optional so users without
+# the keys/packages are unaffected; the vendor router falls back to yfinance
+# when a vendor isn't installed or configured.
 sec = ["sec-api>=1.0.0"]
+finnhub = ["finnhub-python>=2.4.0"]
 
 [project.scripts]
 tradingagents = "cli.main:app"
