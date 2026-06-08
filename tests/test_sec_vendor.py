@@ -113,10 +113,15 @@ def test_router_falls_back_when_sec_unavailable(monkeypatch):
     cfg["data_vendors"]["fundamental_data"] = "sec"
     set_config(cfg)
 
-    # Stub the yfinance fallback so the test stays offline.
+    # Restrict the dispatch to sec (real, unavailable) + one stub fallback, so
+    # the assertion can't be satisfied by a networked vendor like alpha_vantage
+    # (which may actually return data in CI).
     monkeypatch.setitem(
-        interface.VENDOR_METHODS["get_fundamentals"], "yfinance",
-        lambda ticker, curr_date=None: "FALLBACK_YF",
+        interface.VENDOR_METHODS, "get_fundamentals",
+        {
+            "sec": sec.get_fundamentals,
+            "yfinance": lambda ticker, curr_date=None: "FALLBACK_YF",
+        },
     )
     # sec is selected first but unavailable (no key) -> router falls through.
     result = interface.route_to_vendor("get_fundamentals", "AAPL", "2024-05-10")

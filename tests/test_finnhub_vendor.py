@@ -139,9 +139,15 @@ def test_router_falls_back_when_finnhub_unavailable(monkeypatch):
     cfg["data_vendors"]["news_data"] = "finnhub"
     set_config(cfg)
 
+    # Restrict the dispatch to finnhub (real, unavailable) + one stub fallback, so
+    # the assertion can't be satisfied by a networked vendor like alpha_vantage
+    # (which may actually return data in CI).
     monkeypatch.setitem(
-        interface.VENDOR_METHODS["get_news"], "yfinance",
-        lambda ticker, start_date, end_date: "FALLBACK_YF",
+        interface.VENDOR_METHODS, "get_news",
+        {
+            "finnhub": fh.get_news,
+            "yfinance": lambda ticker, start_date, end_date: "FALLBACK_YF",
+        },
     )
     result = interface.route_to_vendor("get_news", "AAPL", "2024-05-01", "2024-05-10")
     assert result == "FALLBACK_YF"
