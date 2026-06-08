@@ -39,6 +39,10 @@ dependencies = [
 sec = ["sec-api>=1.0.0"]
 finnhub = ["finnhub-python>=2.4.0"]
 
+# Streamlit dashboard (dashboard/). The data layer is import-light and tested
+# without this dependency; only the UI pages need streamlit installed.
+dashboard = ["streamlit>=1.40"]
+
 [project.scripts]
 tradingagents = "cli.main:app"
 
