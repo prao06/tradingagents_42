@@ -32,6 +32,17 @@ dependencies = [
     "yfinance>=1.4.1",
 ]
 
+[project.optional-dependencies]
+# Point-in-time data vendors adapted from FinRobot. Optional so users without
+# the keys/packages are unaffected; the vendor router falls back to yfinance
+# when a vendor isn't installed or configured.
+sec = ["sec-api>=1.0.0"]
+finnhub = ["finnhub-python>=2.4.0"]
+
+# Streamlit dashboard (dashboard/). The data layer is import-light and tested
+# without this dependency; only the UI pages need streamlit installed.
+dashboard = ["streamlit>=1.40"]
+
 [project.scripts]
 tradingagents = "cli.main:app"
 

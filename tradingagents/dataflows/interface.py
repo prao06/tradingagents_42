@@ -23,6 +23,11 @@ from .alpha_vantage import (
     get_global_news as get_alpha_vantage_global_news,
 )
 from .alpha_vantage_common import AlphaVantageRateLimitError
+from .sec import get_fundamentals as get_sec_fundamentals
+from .finnhub import (
+    get_news as get_finnhub_news,
+    get_fundamentals as get_finnhub_fundamentals,
+)
 from .symbol_utils import NoMarketDataError
 
 # Configuration and routing logic
@@ -64,6 +69,8 @@ TOOLS_CATEGORIES = {
 VENDOR_LIST = [
     "yfinance",
     "alpha_vantage",
+    "sec",
+    "finnhub",
 ]
 
 # Mapping of methods to their vendor-specific implementations
@@ -80,6 +87,11 @@ VENDOR_METHODS = {
     },
     # fundamental_data
     "get_fundamentals": {
+        # ``sec`` and ``finnhub`` are point-in-time (filings/periods on or before
+        # curr_date); both fall back to the others when their key/package is
+        # unavailable.
+        "sec": get_sec_fundamentals,
+        "finnhub": get_finnhub_fundamentals,
         "alpha_vantage": get_alpha_vantage_fundamentals,
         "yfinance": get_yfinance_fundamentals,
     },
@@ -97,6 +109,9 @@ VENDOR_METHODS = {
     },
     # news_data
     "get_news": {
+        # ``finnhub`` returns dated articles within the window (point-in-time);
+        # falls back to the others when FINNHUB_API_KEY / finnhub is unavailable.
+        "finnhub": get_finnhub_news,
         "alpha_vantage": get_alpha_vantage_news,
         "yfinance": get_news_yfinance,
     },

@@ -1,0 +1,10 @@
+# Dark, terminal-flavored theme for the TradingAgents dashboard.
+[theme]
+base = "dark"
+primaryColor = "#16C290"
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#1A1F2B"
+font = "monospace"
+
+[server]
+headless = true

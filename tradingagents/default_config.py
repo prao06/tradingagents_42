@@ -101,8 +101,8 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "data_vendors": {
         "core_stock_apis": "yfinance",       # Options: alpha_vantage, yfinance
         "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance
-        "fundamental_data": "yfinance",      # Options: alpha_vantage, yfinance
-        "news_data": "yfinance",             # Options: alpha_vantage, yfinance
+        "fundamental_data": "yfinance",      # Options: alpha_vantage, yfinance, sec (PIT 10-K; SEC_API_KEY+sec_api), finnhub (PIT; FINNHUB_API_KEY+finnhub-python)
+        "news_data": "yfinance",             # Options: alpha_vantage, yfinance, finnhub (PIT dated news; FINNHUB_API_KEY+finnhub-python)
     },
     # Tool-level configuration (takes precedence over category-level)
     "tool_vendors": {
