@@ -75,8 +75,10 @@ with right:
         )
 
 st.divider()
+runs = data.list_decision_runs(data.decisions_root())
 st.caption(
-    "Built on data the framework already produces. Next view to add: "
-    "**Decision Detail** — watch the agent pipeline (Market/Sentiment/News/"
-    "Fundamentals → Bull/Bear → Trader → Risk → Portfolio Manager) reason through a ticker."
+    f"Built on data the framework already produces. "
+    f"**Decision Detail** ({len(runs)} saved run{'s' if len(runs) != 1 else ''}) "
+    "lets you watch the agent pipeline — Market/Sentiment/News/Fundamentals → "
+    "Bull/Bear → Trader → Risk committee → Portfolio Manager — reason through a ticker."
 )
