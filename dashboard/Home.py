@@ -1,6 +1,8 @@
 """TradingAgents dashboard — home / overview.
 
-Run:  uv run --with streamlit streamlit run dashboard/Home.py
+Run:  uv run --python 3.13 --extra dashboard streamlit run dashboard/Home.py
+(Use the `dashboard` extra, not `--with streamlit`; needs Python 3.13 — see
+dashboard/README.md for why.)
 """
 
 import sys

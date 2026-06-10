@@ -13,9 +13,18 @@ disk:
 ## Run
 
 ```bash
-uv run --with streamlit streamlit run dashboard/Home.py
+uv run --extra dashboard streamlit run dashboard/Home.py
 # or, if you installed the extra:  pip install -e '.[dashboard]'  &&  streamlit run dashboard/Home.py
 ```
+
+Use the `dashboard` extra (not `--with streamlit`) so the pinned, lock-resolved
+streamlit is installed — an unpinned `--with streamlit` pulls a newer streamlit
+whose Starlette-based server conflicts with the rest of the dependency tree.
+
+Requires **Python 3.13**: the dashboard loads the full `tradingagents` package
+(which transitively needs `tiktoken`), and `tiktoken` has no prebuilt wheel for
+3.14+, so it would otherwise try to build from source and fail without a Rust
+toolchain. If `uv` defaults to a newer interpreter, add `--python 3.13`.
 
 ## Design notes
 - `dashboard/data.py` holds all file parsing as pure functions (no streamlit
