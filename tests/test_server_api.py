@@ -122,3 +122,28 @@ def test_run_api_key_from_env(tmp_path, monkeypatch):
     body = {"ticker": "NVDA", "date": "2024-05-10"}
     assert client.post("/api/runs", json=body).status_code == 401
     assert client.post("/api/runs", json=body, headers={"X-API-Key": "envsecret"}).status_code == 200
+
+
+def test_submit_backtest_dry_run_needs_no_key(tmp_path, monkeypatch):
+    for k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY"):
+        monkeypatch.delenv(k, raising=False)
+    app = create_app(config=_cfg(tmp_path), runner=lambda t, d: None)
+    client = TestClient(app)
+    resp = client.post("/api/backtests", json={
+        "tickers": ["NVDA", "AAPL"], "start": "2024-01-01", "end": "2024-04-01", "dry_run": True,
+    })
+    assert resp.status_code == 200
+    assert app.state.jobs.wait(resp.json()["job_id"])["status"] == "done"
+    assert len(client.get("/api/backtests").json()) == 1  # the backtest now exists
+
+
+def test_seed_demo_populates_all_views(tmp_path):
+    client = TestClient(create_app(config=_cfg(tmp_path), runner=lambda t, d: None))
+    resp = client.post("/api/seed-demo")
+    assert resp.status_code == 200 and resp.json()["runs"] == 2
+
+    assert len(client.get("/api/backtests").json()) >= 1
+    assert len(client.get("/api/runs").json()) == 2
+    j = client.get("/api/journal").json()
+    assert j["summary"]["n_resolved"] == 1
+    assert j["summary"]["n_pending"] == 1

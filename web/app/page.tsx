@@ -1,6 +1,7 @@
 "use client";
 
 import CommandBar from "@/components/CommandBar";
+import SeedButton from "@/components/SeedButton";
 import Metric from "@/components/Metric";
 import ApiError from "@/components/ApiError";
 import { useFetch } from "@/lib/useFetch";
@@ -16,6 +17,9 @@ export default function Home() {
       <h1>TradingAgents</h1>
       <p className="sub">Transparent multi-agent reasoning — and whether it paid off.</p>
       <CommandBar />
+      {!bts.loading && !bts.error && !latest && !jr.loading && !jr.data?.entries.length && (
+        <SeedButton />
+      )}
 
       <h2>Latest backtest</h2>
       {bts.loading ? (

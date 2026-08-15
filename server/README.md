@@ -18,7 +18,13 @@ on an **always-on host** — Render, Railway, Fly.io, or a VM.
 | GET | `/api/runs` | saved propagate() runs (ticker/date/rating) |
 | GET | `/api/runs/{ticker}/{date}` | one run: rating, final decision, persona stages |
 | POST | `/api/runs` `{ticker,date}` | start a live run (background job); needs an LLM key |
+| POST | `/api/backtests` `{tickers,start,end,...,dry_run}` | start a Gate A backtest (background job); `dry_run:true` needs no key |
+| POST | `/api/seed-demo` | write demo backtest + runs + journal (no key) so a fresh deploy is populated |
 | GET | `/api/jobs/{id}` | job status (`running`/`done`/`error`) |
+
+`POST /api/backtests` and `POST /api/seed-demo` honor the same `X-API-Key` auth as
+`/api/runs` when `RUN_API_KEY` is set. To populate a fresh deployment:
+`curl -X POST https://<backend>/api/seed-demo -H "X-API-Key: <key>"`.
 
 ## Run locally
 ```bash

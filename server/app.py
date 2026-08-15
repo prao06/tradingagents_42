@@ -34,6 +34,16 @@ class RunRequest(BaseModel):
     date: str
 
 
+class BacktestRequest(BaseModel):
+    tickers: List[str]
+    start: str
+    end: str
+    freq: str = "monthly"
+    analysts: List[str] = ["market"]
+    long_only: bool = False
+    dry_run: bool = False
+
+
 def _records(df: pd.DataFrame) -> List[dict]:
     """DataFrame -> JSON-safe records (NaN -> None)."""
     if df is None or df.empty:
@@ -63,12 +73,21 @@ def create_app(
     # X-API-Key header. Left unset for local dev / a private backend.
     run_api_key = run_api_key or os.environ.get("RUN_API_KEY")
     origins = allow_origins or [o for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o]
+    run_fn = runner or _default_runner
     app = FastAPI(title="TradingAgents API", version="0.1.0")
     app.add_middleware(
         CORSMiddleware, allow_origins=origins or ["*"],
         allow_methods=["*"], allow_headers=["*"],
     )
-    app.state.jobs = JobManager(runner or _default_runner)
+    app.state.jobs = JobManager()
+
+    def _require_auth(x_api_key: Optional[str]) -> None:
+        # Enforced only when RUN_API_KEY is configured (arg/env).
+        if run_api_key and not (x_api_key and hmac.compare_digest(x_api_key, run_api_key)):
+            raise HTTPException(401, "invalid or missing X-API-Key")
+
+    def _has_llm_key() -> bool:
+        return any(os.environ.get(k) for k in _LLM_KEYS)
 
     def _find_run(ticker: str, date: str):
         for r in data.list_decision_runs(data.decisions_root(cfg)):
@@ -78,7 +97,7 @@ def create_app(
 
     @app.get("/api/health")
     def health():
-        return {"status": "ok", "live_runs_enabled": any(os.environ.get(k) for k in _LLM_KEYS)}
+        return {"status": "ok", "live_runs_enabled": _has_llm_key()}
 
     @app.get("/api/backtests")
     def backtests():
@@ -131,12 +150,47 @@ def create_app(
     @app.post("/api/runs")
     def submit_run(req: RunRequest, x_api_key: Optional[str] = Header(default=None)):
         # Auth first (don't reveal run-enabled state to unauthenticated callers).
-        if run_api_key and not (x_api_key and hmac.compare_digest(x_api_key, run_api_key)):
-            raise HTTPException(401, "invalid or missing X-API-Key")
-        if not any(os.environ.get(k) for k in _LLM_KEYS):
+        _require_auth(x_api_key)
+        if not _has_llm_key():
             raise HTTPException(400, "no LLM API key configured on the server; live runs disabled")
-        job_id = app.state.jobs.submit(req.ticker, req.date)
+        job_id = app.state.jobs.submit(
+            lambda: run_fn(req.ticker, req.date),
+            kind="run", meta={"ticker": req.ticker, "date": req.date},
+        )
         return {"job_id": job_id, "status": "running"}
+
+    @app.post("/api/backtests")
+    def submit_backtest(req: BacktestRequest, x_api_key: Optional[str] = Header(default=None)):
+        _require_auth(x_api_key)
+        if not req.dry_run and not _has_llm_key():
+            raise HTTPException(400, "no LLM API key configured; use dry_run=true or set a key")
+
+        def task():
+            from tradingagents.backtest.engine import generate_dates, run_backtest
+
+            dates = generate_dates(req.start, req.end, req.freq)
+            kw = {}
+            if req.dry_run:
+                from server.demo import dry_stubs
+
+                p, r, b = dry_stubs()
+                kw = {"propagate_fn": p, "returns_fn": r, "baseline_fn": b}
+            run_backtest(
+                req.tickers, dates, config=cfg, long_only=req.long_only,
+                selected_analysts=req.analysts, frequency=req.freq, **kw,
+            )
+
+        job_id = app.state.jobs.submit(
+            task, kind="backtest", meta={"tickers": req.tickers, "dry_run": req.dry_run},
+        )
+        return {"job_id": job_id, "status": "running"}
+
+    @app.post("/api/seed-demo")
+    def seed_demo_endpoint(x_api_key: Optional[str] = Header(default=None)):
+        _require_auth(x_api_key)
+        from server.demo import seed_demo
+
+        return seed_demo(cfg)
 
     @app.get("/api/jobs")
     def jobs():
