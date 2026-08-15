@@ -43,6 +43,11 @@ finnhub = ["finnhub-python>=2.4.0"]
 # without this dependency; only the UI pages need streamlit installed.
 dashboard = ["streamlit>=1.40"]
 
+# FastAPI backend (server/). The "live server-side" tier the Next.js/Vercel
+# frontend calls. Job-manager logic is tested without these; only the HTTP
+# layer needs them.
+server = ["fastapi>=0.110", "uvicorn[standard]>=0.29"]
+
 [project.scripts]
 tradingagents = "cli.main:app"
 
