@@ -1,6 +1,9 @@
 node_modules/
 .next/
 out/
+# The repo-root .gitignore ignores `lib/` (a Python convention); re-include the
+# app's source lib/ so it isn't silently dropped from commits.
+!lib/
 .env.local
 .env*.local
 *.tsbuildinfo
