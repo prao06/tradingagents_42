@@ -32,6 +32,9 @@ Python 3.13 is required (the app loads `tradingagents`, which needs `tiktoken`;
 Build the image in `server/Dockerfile` and set:
 - **Secrets:** `OPENAI_API_KEY` (or another provider) to enable live runs; optionally
   `SEC_API_KEY` / `FINNHUB_API_KEY` for point-in-time vendors.
+- **`RUN_API_KEY`:** set this so `POST /api/runs` requires an `X-API-Key: <value>`
+  header (401 otherwise). Strongly recommended before exposing the backend
+  publicly, since a run costs real LLM tokens. Unset = no auth (local/private use).
 - **`CORS_ORIGINS`:** your Vercel URL, e.g. `https://yourapp.vercel.app` (comma-separated).
 - **Persistent volume** mounted at `~/.tradingagents` (or set `TRADINGAGENTS_RESULTS_DIR`
   / `TRADINGAGENTS_MEMORY_LOG_PATH` to a mounted path) so runs survive restarts.

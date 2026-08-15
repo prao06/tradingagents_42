@@ -8,11 +8,12 @@ cheap and the read-only endpoints work without the heavy graph dependencies.
 
 from __future__ import annotations
 
+import hmac
 import os
 from typing import List, Optional
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -49,10 +50,18 @@ def _default_runner(ticker: str, date: str) -> None:
     TradingAgentsGraph(config=DEFAULT_CONFIG.copy()).propagate(ticker, date)
 
 
-def create_app(config: dict = None, runner=None, allow_origins: List[str] = None) -> FastAPI:
+def create_app(
+    config: dict = None,
+    runner=None,
+    allow_origins: List[str] = None,
+    run_api_key: str = None,
+) -> FastAPI:
     from tradingagents.default_config import DEFAULT_CONFIG
 
     cfg = config or DEFAULT_CONFIG
+    # When set (arg or RUN_API_KEY env), POST /api/runs requires a matching
+    # X-API-Key header. Left unset for local dev / a private backend.
+    run_api_key = run_api_key or os.environ.get("RUN_API_KEY")
     origins = allow_origins or [o for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o]
     app = FastAPI(title="TradingAgents API", version="0.1.0")
     app.add_middleware(
@@ -120,7 +129,10 @@ def create_app(config: dict = None, runner=None, allow_origins: List[str] = None
         }
 
     @app.post("/api/runs")
-    def submit_run(req: RunRequest):
+    def submit_run(req: RunRequest, x_api_key: Optional[str] = Header(default=None)):
+        # Auth first (don't reveal run-enabled state to unauthenticated callers).
+        if run_api_key and not (x_api_key and hmac.compare_digest(x_api_key, run_api_key)):
+            raise HTTPException(401, "invalid or missing X-API-Key")
         if not any(os.environ.get(k) for k in _LLM_KEYS):
             raise HTTPException(400, "no LLM API key configured on the server; live runs disabled")
         job_id = app.state.jobs.submit(req.ticker, req.date)

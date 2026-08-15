@@ -98,3 +98,27 @@ def test_submit_run_executes_with_key(tmp_path, monkeypatch):
     assert result["status"] == "done"
     assert ran == [("NVDA", "2024-05-10")]
     assert client.get(f"/api/jobs/{job_id}").json()["status"] == "done"
+
+
+def test_run_api_key_enforced(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    ran = []
+    app = create_app(config=_cfg(tmp_path), runner=lambda t, d: ran.append(1), run_api_key="secret")
+    client = TestClient(app)
+    body = {"ticker": "NVDA", "date": "2024-05-10"}
+
+    assert client.post("/api/runs", json=body).status_code == 401              # missing header
+    assert client.post("/api/runs", json=body, headers={"X-API-Key": "nope"}).status_code == 401
+    ok = client.post("/api/runs", json=body, headers={"X-API-Key": "secret"})
+    assert ok.status_code == 200
+    app.state.jobs.wait(ok.json()["job_id"])
+    assert ran == [1]
+
+
+def test_run_api_key_from_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("RUN_API_KEY", "envsecret")
+    client = TestClient(create_app(config=_cfg(tmp_path), runner=lambda t, d: None))
+    body = {"ticker": "NVDA", "date": "2024-05-10"}
+    assert client.post("/api/runs", json=body).status_code == 401
+    assert client.post("/api/runs", json=body, headers={"X-API-Key": "envsecret"}).status_code == 200
