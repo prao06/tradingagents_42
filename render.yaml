@@ -1,0 +1,27 @@
+# Render Blueprint for the TradingAgents backend (server/).
+# Deploy: Render Dashboard -> New -> Blueprint -> connect this repo ->
+# fill the secret values (OPENAI_API_KEY, RUN_API_KEY) -> Apply.
+services:
+  - type: web
+    name: tradingagents-api
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      # Enables live propagate() runs. Optional if you only want demo/backtest data.
+      - key: OPENAI_API_KEY
+        sync: false
+      # Protects POST /api/runs, /api/backtests, /api/seed-demo (X-API-Key header).
+      - key: RUN_API_KEY
+        sync: false
+      # Start with "*", then set to your Vercel URL after the frontend deploys.
+      - key: CORS_ORIGINS
+        value: "*"
+    # Free tier has no persistent disk, so seeded/run data resets on restart
+    # (just re-seed anytime). For persistence, set `plan: starter` and uncomment:
+    # disk:
+    #   name: data
+    #   mountPath: /root/.tradingagents
+    #   sizeGB: 1
