@@ -29,8 +29,14 @@
   code path to seed or set temperature per agent** — a fix would be required and
   would itself be a pipeline change (out of scope until Phase 5).
 
+## Instrument status
+- Phase 2 harness `validation/variance_run.py` is **built and unit-tested**
+  (`tests/test_variance_metrics.py`, 15 tests: metrics + Gate 2 + analyze). The
+  pure analysis/gate math is verified; only `collect` (the LLM runs) is deferred.
+  See `validation/RUNBOOK.md`.
+
 ## Deferred measurements (owed a number, not yet computable)
-- Output variance / modal share / entropy (Phase 2) — NOT_COMPUTED (E1).
+- Output variance / modal share / entropy (Phase 2) — NOT_COMPUTED (E1); harness ready.
 - Look-ahead / pre-vs-post training-cutoff gap (Phase 3a) — NOT_COMPUTED (E1).
 - Baselines 1–5 vs pipeline (Phase 3b) — NOT_COMPUTED (E1).
 - Hit rate, multi-horizon alpha, IR/Sharpe, calibration, factor alpha (Phase 4) —
