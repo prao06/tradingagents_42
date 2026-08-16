@@ -48,6 +48,10 @@ dashboard = ["streamlit>=1.40"]
 # layer needs them.
 server = ["fastapi>=0.110", "uvicorn[standard]>=0.29"]
 
+# Supabase job worker (server/store.py + worker loop). Syncs engine artifacts
+# into Supabase Postgres. Mapping logic is tested without this dependency.
+worker = ["supabase>=2.0"]
+
 [project.scripts]
 tradingagents = "cli.main:app"
 
